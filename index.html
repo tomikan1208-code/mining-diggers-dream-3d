@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1b2521">
+  <link id="tab-icon" rel="icon" href="data:,">
+  <title>炭鉱掘りは夢を見る 3D</title>
+</head>
+<body>
+  <div class="game" id="game">
+    <header class="topbar">
+      <div class="brand">
+        <button type="button" id="back" class="quiet top-back" aria-label="ホーム" hidden>
+          <i data-icon="back"></i><span>ホーム</span>
+        </button>
+        <i class="brand-icon" data-icon="mark"></i>
+        <span class="brand-name">炭鉱掘りは夢を見る</span>
+        <span class="build-label">3D試作</span>
+      </div>
+      <div class="header-actions">
+        <div class="render-controls" aria-label="描画方式">
+          <div class="render-switch" role="group" aria-label="描画方式を選ぶ">
+            <button type="button" class="render-mode" data-render-mode="gaussian" title="ピクセルGaussian" aria-label="ピクセルGaussian" aria-pressed="true" disabled>ドット</button>
+            <button type="button" class="render-mode" data-render-mode="raw" title="生のGaussian" aria-label="生のGaussian" aria-pressed="false" disabled>生<span class="raw-suffix">Gaussian</span></button>
+            <button type="button" class="render-mode" data-render-mode="polygon" aria-pressed="false" disabled>ポリゴン</button>
+          </div>
+          <span id="live-fps" class="live-fps">— fps</span>
+          <button type="button" id="render-compare" class="quiet" disabled>描画比較</button>
+        </div>
+        <button type="button" id="developer-toggle" class="quiet" aria-expanded="false" aria-controls="developer-panel" aria-label="開発ツール" hidden>
+          <i data-icon="hammer"></i><span>開発ツール</span>
+        </button>
+        <span id="connection" class="connection"><span aria-hidden="true"></span><b>接続中</b></span>
+        <button type="button" class="quiet help-trigger" id="help" title="操作とルール" aria-label="操作ガイド">
+          <i data-icon="help"></i><span>操作ガイド</span>
+        </button>
+      </div>
+    </header>
+
+    <section class="hud" id="hud" aria-label="両陣営の状況" hidden>
+      <div class="camp-readout blue-readout" id="hud-blue"></div>
+      <div class="shift-readout">
+        <div class="shift-round"><span>ターン</span><b id="round">01</b></div>
+        <div class="shift-clock"><i id="time-icon" data-icon="sun"></i><strong id="clock">2:00</strong></div>
+        <div class="day-track" id="day-track" aria-hidden="true"></div>
+        <div id="phase" class="shift-phase"><span id="phase-stage">朝</span><span id="phase-divide" aria-hidden="true">／</span><span id="phase-actor"></span></div>
+      </div>
+      <div class="camp-readout red-readout" id="hud-red"></div>
+    </section>
+
+    <main class="workspace" id="workspace" data-screen="home">
+      <section class="board" id="board" aria-label="炭鉱の3D盤面">
+        <canvas class="sky-canvas" aria-hidden="true"></canvas>
+        <canvas class="model-canvas" tabindex="0" aria-label="3D盤面。ドラッグか矢印キーで移動し、マウスホイールで拡大縮小"></canvas>
+        <div class="board-corners" aria-hidden="true"></div>
+        <div class="home-title" id="home-title">
+          <h1>炭鉱掘りは<br>夢を見る</h1>
+        </div>
+        <span class="model-note" id="model-note" role="status">模型を読み込み中</span>
+        <span class="world-marker blue-marker" data-marker="home" hidden>あなた</span>
+        <span class="world-marker blue-marker" data-marker="blue" hidden>あなた</span>
+        <span class="world-marker red-marker" data-marker="red" hidden>相手</span>
+        <button type="button" id="workshop-marker" class="world-marker workshop-marker" data-marker="workshop" hidden><i data-icon="hammer"></i>作業台</button>
+        <div class="result" id="result" hidden>
+          <i data-icon="mark"></i><strong id="result-title"></strong><p id="result-text"></p>
+        </div>
+
+        <div class="board-toolbar">
+          <span class="camera-hint" id="camera-hint">ドラッグで移動 ／ ホイールで拡大縮小</span>
+          <div class="view-tools">
+            <div class="view-switch" id="views" role="group" aria-label="盤面の表示範囲" hidden>
+              <button type="button" data-view="all" aria-pressed="true"><i data-icon="layers"></i>全景</button>
+              <button type="button" data-view="surface" aria-pressed="false"><i data-icon="pine"></i>地上</button>
+              <button type="button" data-view="underground" aria-pressed="false"><i data-icon="pick"></i>地下</button>
+            </div>
+            <div class="zoom-tools" role="group" aria-label="カメラ">
+              <button type="button" id="zoom-out" title="縮小" aria-label="縮小"><i data-icon="minus"></i></button>
+              <button type="button" id="zoom-in" title="拡大" aria-label="拡大"><i data-icon="plus"></i></button>
+              <button type="button" id="zoom-reset" title="視点を戻す" aria-label="視点を戻す"><i data-icon="focus"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <section class="hand-drawer" id="hand-drawer" aria-label="手札" hidden>
+          <div class="drawer-header">
+            <span>手札 <b id="drawer-count">0</b></span>
+            <button type="button" class="quiet" id="hide-hand"><i data-icon="down"></i>しまう</button>
+          </div>
+          <div id="hand-list" class="hand-list"></div>
+          <div class="card-action" id="card-action" hidden>
+            <div><b id="card-name"></b><span id="card-desc"></span></div>
+            <button type="button" class="pixel-button brass" id="play-card">カードを使う</button>
+          </div>
+        </section>
+      </section>
+
+      <aside class="office" id="office" aria-label="メニュー">
+        <div class="office-body">
+          <section id="home-panel" class="office-page" aria-labelledby="office-title">
+            <h2 class="office-title" id="office-title"><i data-icon="sign"></i>鉱区事務所</h2>
+            <div class="office-menu">
+              <button type="button" id="network" class="menu-entry primary">
+                <i data-icon="network"></i>
+                <span><b>インターネット対戦</b><small>部屋番号で2人対戦</small></span>
+                <i class="entry-arrow" data-icon="right"></i>
+              </button>
+              <button type="button" id="preview" class="menu-entry">
+                <i data-icon="layers"></i>
+                <span><b>盤面プレビュー</b><small>ひとりで地上と地下を見る</small></span>
+                <i class="entry-arrow" data-icon="right"></i>
+              </button>
+            </div>
+          </section>
+
+          <section id="network-panel" class="office-page" hidden>
+            <h2 class="office-title"><i data-icon="network"></i>インターネット対戦</h2>
+            <label class="field-label" for="player-name">名前</label>
+            <input id="player-name" type="text" maxlength="16" autocomplete="nickname" placeholder="鉱夫の名前">
+            <button type="button" id="create-room" class="pixel-button brass full"><i data-icon="plus"></i>部屋を作る</button>
+            <form class="join-form" id="join-form">
+              <label class="field-label" for="room-input">部屋番号で参加</label>
+              <div class="join-fields">
+                <input type="text" id="room-input" maxlength="4" placeholder="4文字" autocapitalize="characters" autocomplete="off" required>
+                <button type="submit" class="pixel-button">入場</button>
+              </div>
+            </form>
+            <p class="form-message" id="network-notice" aria-live="polite"></p>
+          </section>
+
+          <section id="room-panel" class="office-page" hidden>
+            <h2 class="office-title"><i data-icon="network"></i>対戦の待合室</h2>
+            <div class="room-ticket">
+              <div><span>部屋番号</span><b id="room-code"></b></div>
+              <button type="button" class="pixel-button" id="copy-room" title="招待リンクをコピー"><i data-icon="copy"></i>招待</button>
+            </div>
+            <div class="roster">
+              <div class="blue-seat"><span></span><b id="own-seat">あなた</b><small>あなた</small></div>
+              <div class="red-seat"><span></span><b id="rival-seat">入場を待っています</b><small>相手</small></div>
+            </div>
+            <p id="room-note" class="room-note" aria-live="polite">相手に部屋番号を伝えてください</p>
+            <button type="button" id="start-match" class="pixel-button brass full" disabled>対戦を始める</button>
+            <button type="button" id="leave-room" class="quiet leave-room"><i data-icon="back"></i>部屋を出る</button>
+          </section>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="commands" id="commands" hidden>
+      <div class="command-hand">
+        <button type="button" class="pixel-button hand-toggle" id="toggle-hand" aria-controls="hand-drawer" aria-expanded="false">
+          <i data-icon="cards"></i>手札 <b id="hand-count">0</b>
+        </button>
+        <button type="button" class="quiet" id="craft"><i data-icon="hammer"></i>クラフト</button>
+      </div>
+      <div class="log" role="status"><i data-icon="note"></i><span id="log-text"></span></div>
+      <div class="command-turn">
+        <button type="button" class="quiet" id="preview-dusk" hidden><i data-icon="sun"></i>日没を見る</button>
+        <button type="button" class="quiet" id="preview-again" hidden>もう一度</button>
+        <button type="button" class="pixel-button brass" id="end-turn"><i data-icon="clock"></i>ターン終了</button>
+      </div>
+    </footer>
+    <div class="toast" id="toast" role="status" hidden></div>
+  </div>
+
+  <dialog id="help-dialog" class="dialog">
+    <div class="dialog-heading"><h2>操作ガイド</h2><button type="button" data-close="help-dialog" class="quiet">閉じる</button></div>
+    <dl class="help-list">
+      <div><dt>盤面</dt><dd>ドラッグで移動、ホイールで拡大縮小。Shiftを押しながらドラッグで少し回転できます。</dd></div>
+      <div><dt>手札</dt><dd>「手札」か H キーで出し入れ。カードを選び、「カードを使う」で実行します。</dd></div>
+      <div><dt>採掘と動力</dt><dd>採掘15で勝利。動力はカードの体力コストに対応し、0でも対戦は続きます。</dd></div>
+      <div><dt>交代</dt><dd>各ターンは120秒。日没で自動終了し、約1秒で次の朝になります。</dd></div>
+      <div><dt>試作デッキ</dt><dd>両陣営とも同じ12種類を1枚ずつ入れたデッキを使います。</dd></div>
+    </dl>
+  </dialog>
+
+  <dialog id="craft-dialog" class="dialog craft-dialog">
+    <div class="dialog-heading">
+      <h2><i data-icon="hammer"></i>作業台</h2>
+      <button type="button" data-close="craft-dialog" class="quiet">閉じる</button>
+    </div>
+    <div id="craft-stock" class="craft-stock" aria-label="自分の資材"></div>
+    <div class="craft-columns">
+      <div id="recipe-list" class="recipe-list" role="group" aria-label="クラフトの設計図"></div>
+      <section class="craft-detail" aria-labelledby="craft-name">
+        <h3 id="craft-name"></h3>
+        <div class="craft-product">
+          <canvas id="craft-card" width="240" height="360" aria-hidden="true"></canvas>
+          <div>
+            <div id="craft-costs" class="craft-costs"></div>
+            <p id="craft-status" class="craft-status" aria-live="polite"></p>
+          </div>
+        </div>
+        <button type="button" id="craft-confirm" class="pixel-button brass full">作る</button>
+      </section>
+    </div>
+  </dialog>
+  <dialog id="render-dialog" class="dialog render-dialog">
+    <div class="dialog-heading"><h2>描画比較</h2><button type="button" data-close="render-dialog" class="quiet">閉じる</button></div>
+    <table class="render-table">
+      <thead><tr><th scope="col">指標</th><th scope="col">ドット</th><th scope="col">生Gaussian</th><th scope="col">ポリゴン</th></tr></thead>
+      <tbody>
+        <tr data-measure="fps"><th scope="row">フレームレート</th><td>—</td><td>—</td><td>—</td></tr>
+        <tr data-measure="cpu"><th scope="row">CPU 描画時間</th><td>—</td><td>—</td><td>—</td></tr>
+        <tr data-measure="gpu"><th scope="row">GPU 描画時間</th><td>—</td><td>—</td><td>—</td></tr>
+        <tr data-measure="calls"><th scope="row">描画呼び出し／フレーム</th><td>—</td><td>—</td><td>—</td></tr>
+        <tr data-measure="count"><th scope="row">Gaussian 数</th><td>—</td><td>—</td><td>—</td></tr>
+        <tr data-measure="triangles"><th scope="row">ポリゴン三角形／フレーム</th><td>—</td><td>—</td><td>—</td></tr>
+        <tr data-measure="cpuBytes"><th scope="row">CPU 描画用配列</th><td>—</td><td>—</td><td>—</td></tr>
+        <tr data-measure="gpuBytes"><th scope="row">GPU 描画用メモリ（推定）</th><td>—</td><td>—</td><td>—</td></tr>
+        <tr data-measure="fileBytes"><th scope="row">モデルファイル</th><td>—</td><td>—</td><td>—</td></tr>
+      </tbody>
+    </table>
+    <div class="render-measure">
+      <button type="button" id="measure-render" class="pixel-button brass">同じ視点で測る</button>
+      <span id="measure-status" role="status"></span>
+    </div>
+    <p class="measure-note">画角と盤面の演出を固定して測定します。GPU時間は対応ブラウザーで表示します。メモリは表示中の描画データを集計しています。</p>
+  </dialog>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
