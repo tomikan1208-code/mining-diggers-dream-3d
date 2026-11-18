@@ -224,7 +224,7 @@ function updateClock() {
   const paused = match?.paused && match.phase === 'turn';
   const remaining = match ? Math.max(0, match.remainingMs - (paused ? 0 : performance.now() - receivedAt)) : TURN_MS;
   const seconds = match?.phase === 'rest' ? 0 : Math.ceil(remaining / 1000);
-  const light = seconds * 1000 / limitMs;
+  const light = seconds * 1000 / (match?.lateStart ? TURN_MS : limitMs);
   const stage = match?.phase === 'rest' || seconds === 0 ? '夜' : light > .75 ? '朝' : light > .283 ? '昼' : '夕';
   const label = !match ? '入場待ち' : match.phase === 'finished' ? '対戦終了'
     : match.phase === 'rest' ? '休息中' : stage;
@@ -237,9 +237,10 @@ function updateClock() {
   const actor = room.developer ? (match.active === 0 ? '青の番' : '赤の番') : (myTurn() ? 'あなたの番' : '相手の番');
   text($('phase-actor'), takingTurns ? actor : '');
   drawIcon($('time-icon'), stage === '夜' ? 'moon' : 'sun');
-  const until = Math.ceil(12 * light);
+  const available = Math.ceil(12 * Math.min(1, limitMs / TURN_MS));
+  const until = Math.ceil(12 * seconds * 1000 / TURN_MS);
   for (const [i, pip] of turnPips.entries()) {
-    const targetClass = i >= until ? '' : i < 3 ? 'dusk' : 'day';
+    const targetClass = i >= available ? 'time-lost' : i >= until ? '' : i < 3 ? 'dusk' : 'day';
     if (pip.className !== targetClass) pip.className = targetClass;
   }
 }

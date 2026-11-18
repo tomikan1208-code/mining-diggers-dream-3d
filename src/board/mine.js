@@ -1,3 +1,4 @@
+import { MathUtils } from 'three';
 import { batch, beam, box, group, lantern, rng, round, TEAM } from './art.js';
 import { GOAL } from '../game-data.js';
 import { LAND, SHAFT, rampY } from './locations.js';
@@ -87,6 +88,27 @@ function vein(parent, x, index) {
   }
 }
 
+function drillRig(parent) {
+  const frame = group(parent, 0, FLOOR + .11, TRACK);
+  box(frame, 0, .36, 0, 1.54, .46, 1.03, 0x544a4b);
+  box(frame, .18, .69, 0, .86, .48, .91, 0xb38a51);
+  for (const side of [-1, 1]) {
+    box(frame, 0, .16, side * .55, 1.44, .32, .28, 0x514548);
+    lantern(frame, -.25, .81, side * .46, .72, 0x89e4dc);
+  }
+  batch(frame);
+  const head = group(frame, -.66, .58, 0);
+  for (let i = 0; i < 6; i++) {
+    const bit = group(head, -.13 * i);
+    bit.rotation.x = i * .64;
+    const width = .78 - i * .10;
+    box(bit, 0, 0, 0, .14, width, width, i % 2 ? 0x9c9b9b : 0xc3b3a4);
+  }
+  batch(head);
+  frame.visible = false;
+  return { frame, head };
+}
+
 export function buildMine(parent, surface, index, getRock) {
   const sign = index === 0 ? -1 : 1;
   const fixtures = group(parent);
@@ -105,7 +127,8 @@ export function buildMine(parent, surface, index, getRock) {
   framing(fixtures, sign * 17.48, true, 0xffbf75);
   vein(fixtures, sign * 18.35, index);
   batch(fixtures);
-  const trolley = cart(parent, TEAM[index]);
+  const trolleys = Array.from({ length: 3 }, () => cart(parent, TEAM[index]));
+  const drill = drillRig(parent);
   const sections = [];
   for (let n = 0; n < GOAL; n++) {
     const x = mineFace(sign, n + .5);
@@ -118,8 +141,105 @@ export function buildMine(parent, surface, index, getRock) {
     const name = 'Bedrock_' + index + '_' + n;
     const rock = getRock(name);
     parent.add(rock);
-    sections.push({ cut, rock, name, part: index * GOAL + n, changed: -Infinity });
+    const rubble = group(parent, x, FLOOR, LAND.front + .065);
+    const chips = rng(n * 149 + 750);
+    for (let k = 0; k < 7; k++) {
+      const chip = box(rubble, (chips() - .5) * .85, .12 + chips() * .44, chips() * .18,
+        .19 + chips() * .30, .15 + chips() * .29, .18 + chips() * .29, [0x625056, 0x786368, 0x4b4047][k % 3]);
+      chip.rotation.set(chips() * .75, chips() * 2, chips() * 1.1);
+    }
+    batch(rubble);
+    rubble.visible = false;
+    sections.push({ cut, rock, rubble, name, part: index * GOAL + n, changed: -Infinity, blocked: false });
   }
-  trolley.position.x = sign * (SHAFT.startRamp - .74);
-  return { trolley, sections, sign, count: 0, goal: 0, next: 0, blast: false };
+  const mine = { trolleys, drill, sections, sign, rails: 0 };
+  resetMine(mine, 0);
+  return mine;
+}
+
+export function resetMine(mine, count) {
+  Object.assign(mine, { count, goal: count, queue: [], active: null });
+  for (const section of mine.sections) {
+    section.changed = -Infinity;
+    section.blocked = false;
+  }
+  for (const [i, trolley] of mine.trolleys.entries()) {
+    trolley.position.x = mine.sign * (SHAFT.startRamp - .74 - i * 1.2);
+    trolley.visible = i === 0;
+  }
+  mine.drill.frame.visible = false;
+}
+
+export function planMine(mine, to, now, style = 'dig', tool) {
+  if (to === mine.goal && style !== 'blast') return;
+  mine.queue.push({ to, at: now, style, tool });
+  mine.goal = to;
+}
+
+const delay = {
+  blast: .64, charge: .56, drill: .42, cart: .60, hatch: .71,
+  dig: .48, diamond: .43, gold: .46, arcane: .25, swap: .25, burn: .34, edit: .06,
+};
+const simultaneous = new Set(['blast', 'charge', 'hatch', 'swap', 'burn', 'edit']);
+
+// Each queue entry owns a complete transition, so a second card can arrive while a mine is still clearing.
+export function updateMine(mine, now, dt, fx, paint, mode, reduced) {
+  if (!mine.active && mine.queue[0]?.at <= now) {
+    const action = mine.queue.shift();
+    mine.active = { ...action, from: mine.count, next: now + delay[action.style] * (reduced ? .16 : 1) };
+  }
+  const active = mine.active;
+  if (active && now >= active.next) {
+    const { from, to, style } = active;
+    const isBatch = simultaneous.has(style);
+    const next = isBatch ? to : mine.count + Math.sign(to - mine.count);
+    const open = next > mine.count;
+    if (style === 'blast') fx.collapse(mine, from, to, now, reduced);
+    for (let i = Math.min(next, mine.count); i < Math.max(next, mine.count); i++) {
+      const section = mine.sections[i];
+      section.changed = style === 'edit' ? -Infinity : now;
+      section.blocked = !open && style !== 'edit';
+      if (style === 'blast' || style === 'edit') continue;
+      const x = mineFace(mine.sign, i + .51);
+      const at = [x, FLOOR + .84, TRACK + .61];
+      const accent = { diamond: 0x6be1dc, gold: 0xeac36d, arcane: 0xc399f3, hatch: 0xb16ee5, swap: 0xebbd7a }[style];
+      fx.burst(at, now, ['charge', 'burn'].includes(style) ? 'red' : 'stone',
+        reduced ? 3 : isBatch ? 6 : 12, accent);
+      if (accent || style === 'charge' || style === 'burn') {
+        fx.glow([x, FLOOR + 1.03, LAND.front + .12], now, accent ?? 0xff6c36, isBatch ? 1.64 : 1.1, .41);
+      }
+    }
+    mine.count = next;
+    active.next = now + (reduced ? .02 : ['drill', 'diamond'].includes(style) ? .12 : .20);
+    if (next === to) mine.active = null;
+  }
+
+  for (const [i, section] of mine.sections.entries()) {
+    const open = i < mine.count;
+    const elapsed = reduced ? 1 : Math.min(1, Math.max(0, (now - section.changed) / (open ? .63 : .59)));
+    section.cut.visible = open;
+    section.rock.visible = mode === 'polygon' && !open;
+    section.rock.position.y = open ? 0 : 1.16 * (1 - elapsed ** 2);
+    section.rubble.visible = section.blocked && !open;
+    section.rubble.position.y = FLOOR + .57 * (1 - elapsed ** 2);
+    paint[section.part] = open ? elapsed : elapsed ** 2 - 1;
+  }
+
+  const start = SHAFT.startRamp - .74;
+  const end = Math.max(Math.abs(mineFace(mine.sign, mine.count)) + .85, 2.6);
+  const { frame, head } = mine.drill;
+  frame.visible = active?.style === 'drill';
+  if (frame.visible) {
+    frame.position.x = MathUtils.damp(frame.position.x, mine.sign * (end + .55), 13, dt);
+    frame.rotation.y = mine.sign > 0 ? 0 : Math.PI;
+    head.rotation.x = reduced ? 0 : now * 29;
+  } else frame.position.x = mine.sign * (end + .55);
+  for (const [i, trolley] of mine.trolleys.entries()) {
+    trolley.visible = i <= Math.min(2, mine.rails);
+    if (!trolley.visible) continue;
+    const moving = active?.style === 'cart';
+    const target = moving ? end + i * .72 : start - i * 1.06;
+    const safe = Math.max(end, target);
+    trolley.position.x = reduced ? mine.sign * safe : MathUtils.damp(trolley.position.x, mine.sign * safe, moving ? 7 : 3, dt);
+  }
 }

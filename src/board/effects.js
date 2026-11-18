@@ -55,6 +55,7 @@ export class StageEffects {
     }));
     this.clouds = [];
     this.chips = [];
+    this.time = -Infinity;
     this.shards = new T.InstancedMesh(new T.DodecahedronGeometry(1, 0), new T.MeshBasicMaterial(), chipLimit);
     this.shards.count = 0;
     this.shards.frustumCulled = false;
@@ -72,7 +73,10 @@ export class StageEffects {
   }
 
   clear() {
-    for (const cloud of this.clouds) cloud.model.visible = false;
+    for (const cloud of this.clouds) {
+      cloud.model.visible = false;
+      cloud.until = -Infinity;
+    }
     this.chips.length = 0;
     this.shards.count = 0;
     this.flights.length = 0;
@@ -85,7 +89,7 @@ export class StageEffects {
       color = 0x8e7974, life = 1.6, size = 1.1, width = 1, growth = 2.6, opacity = .67,
       rise = .75, drift = 0, depth = 0, glow = false, scope = scopeAt(at),
     } = options;
-    let cloud = this.clouds.find(item => item.until <= now);
+    let cloud = this.clouds.find(item => item.until <= this.time);
     if (!cloud && this.clouds.length < cloudLimit) {
       cloud = { model: sprite(this.root, this.plume, 6) };
       this.clouds.push(cloud);
@@ -131,18 +135,19 @@ export class StageEffects {
 
   collapse(mine, from, to, now, reduced) {
     const shockX = mine.sign * (SHAFT.first - (from + to) * .5 * SHAFT.cell);
-    const colors = [0x756465, 0x4d434a, 0x927574, 0x81534d];
+    const colors = [0x3c343c, 0x54464d, 0x8d7577, 0xb69b89];
     for (let i = to; i < from; i++) {
       const x = mine.sign * (SHAFT.first - (i + .5) * SHAFT.cell);
       const flash = [x, SHAFT.floor + 1.35, LAND.front + .18];
-      this.glow(flash, now, reduced ? 0xe25e42 : 0xff4d22, reduced ? 1.42 : 2.38, .42);
-      if (!reduced) this.glow([x, SHAFT.floor + 1.08, LAND.front + .24], now, 0xffbe70, 1.28, .21);
+      this.glow(flash, now, reduced ? 0xe25e42 : 0xff4129, reduced ? 1.42 : 2.38, .56);
+      if (!reduced) this.glow([x, SHAFT.floor + 1.08, LAND.front + .24], now, 0xffb56a, 1.48, .27);
       this.burst(flash, now, 'red', reduced ? 3 : 15);
       for (let k = 0; k < 4; k++) {
         this.cloud([x + (this.random() - .5) * .64, SHAFT.floor + .59 + this.random() * 1.4, LAND.front + .34],
-          now + .07 + this.random() * .16, {
-            color: colors[k], life: 1.32 + this.random() * .8, size: .88 + this.random() * .45, growth: 2.9,
-            rise: .46 + this.random() * .63, drift: (x - shockX) * .37 + (this.random() - .5) * .48, opacity: .74,
+          now + .09 + this.random() * .19, {
+            color: colors[k], life: 1.75 + this.random() * .83, size: 1.08 + this.random() * .48, growth: 3.35,
+            rise: .86 + this.random() * 1.16, drift: (x - shockX) * .40 + (this.random() - .5) * .61,
+            depth: .37, opacity: k < 2 ? .91 : .77,
           });
       }
     }
@@ -151,11 +156,11 @@ export class StageEffects {
       this.glow(end, now, 0xee5b38, 2.45);
       this.cloud(end, now + .14, { color: 0x6b5a61, size: 1.38, rise: .85 });
     } else {
-      this.glow([shockX, SHAFT.floor + 1.55, LAND.front + .16], now, 0xec3a26, 2.3, .48, 1 + .38 * (from - to));
+      this.glow([shockX, SHAFT.floor + 1.49, LAND.front + .38], now, 0xec3a26, 2.46, .60, 1 + .40 * (from - to));
     }
     for (let k = 0; k < 4; k++) {
       const vent = [mine.sign * (SHAFT.portal - .67 - k * .15), .32 + k * .19, SHAFT.track + .75];
-      this.cloud(vent, now + k * .065, { color: colors[k], life: 1.7, size: 1.08, growth: 2.5, rise: 2.5, drift: mine.sign });
+      this.cloud(vent, now + k * .065, { color: colors[k], life: 1.9, size: 1.21, growth: 2.7, rise: 2.5, drift: mine.sign });
       if (!k) this.glow(vent, now, 0xfe6537, 2.1, .42);
     }
   }
@@ -186,12 +191,13 @@ export class StageEffects {
   }
 
   frame(now, view, camera, night, reduced) {
+    this.time = now;
     for (const { model, sign, x, z, phase } of this.mist) {
       const drift = reduced ? 0 : Math.sin(now * .22 + phase);
-      model.position.set(sign * (x + .54 * drift), .80 + .27 * Math.sin(phase) + .14 * drift, z);
-      model.scale.set(4.1 + (x - 29) * .22, 1.45 + (x - 29) * .28, 1);
-      model.material.color.setRGB(.43 - night * .19, .52 - night * .19, .49 - night * .11);
-      model.material.opacity = (.18 + (x - 29) * .075) * (.94 + .06 * drift);
+      model.position.set(sign * (x + .54 * drift), .96 + .48 * Math.sin(phase) + .17 * drift, z);
+      model.scale.set(4.28 + (x - 29) * .26, 1.75 + (x - 29) * .29, 1);
+      model.material.color.setRGB(.43 - night * .17, .46 - night * .17, .44 - night * .11);
+      model.material.opacity = (.145 + (x - 29) * .063) * (.94 + .06 * drift);
     }
     for (const cloud of this.clouds) {
       const { model, at, life, size, width, growth, rise, drift, depth, opacity, glow, scope } = cloud;
@@ -202,7 +208,8 @@ export class StageEffects {
       const swell = size * mix(.64, growth, 1 - (1 - t) ** 2);
       model.position.set(at[0] + drift * elapsed, at[1] + rise * elapsed, at[2] + depth * elapsed);
       model.scale.set(swell * width, swell * (glow ? 1 : .77), 1);
-      model.material.opacity = opacity * Math.min(1, elapsed / (glow ? .06 : .17)) * (1 - t) ** (glow ? 1.1 : .84);
+      const attack = glow ? 1 : Math.min(1, .21 + elapsed / .18);
+      model.material.opacity = opacity * attack * (1 - t) ** (glow ? 1.1 : .84);
     }
     this.chips = this.chips.filter(chip => now < chip.start + chip.life);
     let count = 0;

@@ -226,8 +226,9 @@ export function workbench(parent, x, z) {
   box(prop, .59, .783, .26, .2, .077, .18, 0x93939a);
 }
 
-export function field(parent, x, z, seed) {
+export function field(parent, x, z, seed, animated = false) {
   const field = group(parent, x, .14, z);
+  const shoots = group(field);
   box(field, 0, .01, 0, 2.5, .087, 1.97, 0x6c5939);
   const random = rng(seed);
   for (let r = 0; r < 4; r++) {
@@ -237,9 +238,9 @@ export function field(parent, x, z, seed) {
       const a = -.99 + i * .25 + .07 * random();
       const b = row + (random() - .5) * .2;
       const h = .31 + random() * .27;
-      const stem = box(field, a, h * .5 + .06, b, .035, h, .035, 0xb3944f);
+      const stem = box(shoots, a, h * .5 + .06, b, .035, h, .035, 0xb3944f);
       stem.rotation.z = (random() - .5) * .21;
-      const wheat = box(field, a + .015, h + .044, b, .107, .168, .10, r % 2 ? 0xd4b363 : 0xe0c978);
+      const wheat = box(shoots, a + .015, h + .044, b, .107, .168, .10, r % 2 ? 0xd4b363 : 0xe0c978);
       wheat.rotation.z = stem.rotation.z;
     }
   }
@@ -247,6 +248,13 @@ export function field(parent, x, z, seed) {
     for (const x of [-1.33, 0, 1.33]) box(field, x, .29, side * 1.07, .12, .58, .12, 0x775b3d);
     box(field, 0, .23, side * 1.07, 2.78, .075, .09, 0xa17d52);
     if (side < 0) box(field, 0, .43, side * 1.07, 2.78, .075, .09, 0x9a774b);
+  }
+  if (animated) {
+    field.remove(shoots);
+    batch(field, true);
+    batch(shoots);
+    field.add(shoots);
+    field.userData.shoots = shoots;
   }
   return field;
 }

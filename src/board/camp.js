@@ -2,12 +2,11 @@ import { CRAFT_RECIPES } from '../legacy-cards.js';
 import { RESOURCES, materialsFor } from '../game-data.js';
 import { barrel, batch, box, cabin, field, flag, group, hayBale, paint, TEAM } from './art.js';
 import { CAMP, groundY, SHAFT } from './locations.js';
+import { buildEquipment } from './equipment.js';
 
 const amber = 0xf3bd69;
 const lampOff = 0x49454c;
 const clamp = (v, low, high) => Math.max(low, Math.min(high, v));
-const ramp = t => t * t * (3 - 2 * t);
-const lerp = (a, b, t) => a + (b - a) * t;
 const stockModels = {
   wood: 'ResourceWood', cobble: 'ResourceStone', iron: 'ResourceIron', wheat: 'ResourceWheat',
 };
@@ -65,14 +64,15 @@ function storage(parent, sign, objects) {
   }));
 }
 
-export function buildCamp(parent, mineParent, index, objects) {
+export function buildCamp(parent, mineParent, index, objects, getModel) {
   const sign = index === 0 ? -1 : 1;
   const team = TEAM[index];
   const work = group(parent);
   const marker = flag(work, sign * 13.95, .14, -4.12, team);
-  cabin(work, sign * CAMP.houseX, CAMP.houseZ, team);
+  const lodge = cabin(work, sign * CAMP.houseX, CAMP.houseZ, team);
+  const plot = field(work, sign * CAMP.plot, -.64, 821 + index, true);
+  const equipment = buildEquipment(work, sign, getModel, plot.userData.shoots);
   const scenery = group(work);
-  field(scenery, sign * CAMP.plot, -.64, 821 + index);
   barrel(scenery, sign * 19.66, -2.83);
   hayBale(scenery, sign * 7.58, -2.16);
   hayBale(scenery, sign * 7.19, -2.64, .11, .8);
@@ -86,20 +86,21 @@ export function buildCamp(parent, mineParent, index, objects) {
   const generator = powerReadout(work, sign * CAMP.powerX, 1.36, CAMP.powerZ + .44);
   const underground = powerReadout(mineParent, sign * 18.02, SHAFT.floor + .87, SHAFT.back + .26);
   const stock = storage(work, sign, objects);
-  const cargo = objects.add(work, 'SupplyCrate', [sign * CAMP.yard, groundY + .13, CAMP.yardZ + .72], true);
   const items = new Map(Object.keys(CRAFT_RECIPES).map(id => [id, [-.35, .35].map(offset =>
     objects.add(work, 'Craft_' + id, [sign * CAMP.mill + offset, groundY + 1.18, CAMP.millZ + .48, 1.10], true))]));
-  let job = null;
+  const jobs = [];
   let previewId = null;
   let completion = null;
+  let data = null;
 
   function hideItems(id) {
     for (const item of items.get(id) ?? []) item.shown = false;
   }
 
   return {
-    sign, marker,
+    sign, marker, door: lodge.userData.door, equipment,
     update(player) {
+      data = player;
       generator.update(player?.health ?? 0, player?.maxHealth ?? 10);
       underground.update(player?.health ?? 0, player?.maxHealth ?? 10);
       for (const [key, bins] of Object.entries(stock)) {
@@ -107,45 +108,35 @@ export function buildCamp(parent, mineParent, index, objects) {
       }
     },
     reset() {
-      hideItems(job?.id);
       hideItems(previewId);
       hideItems(completion?.id);
-      cargo.shown = false;
-      job = null;
+      jobs.length = 0;
       completion = null;
       previewId = null;
+      equipment.reset();
     },
     preview(id) {
       if (previewId === id) return;
       hideItems(previewId);
       previewId = items.has(id) ? id : null;
     },
-    craft(id, player, now) {
+    craft(id, player, now, cards, onFinish) {
       const recipe = CRAFT_RECIPES[id];
       if (!recipe || !player) return;
-      hideItems(job?.id);
-      hideItems(completion?.id);
-      completion = null;
       const materials = materialsFor(player, recipe);
-      const start = Object.keys(RESOURCES).findIndex(key => materials[key] > 0);
-      job = {
-        id, at: now, flashed: false, delivery: start >= 0, copies: recipe.usesIron && player.anvil ? 2 : 1,
-        source: sign * (CAMP.yard + (start - 1.5) * 1.47),
-      };
+      const resource = Object.keys(materials).find(key => materials[key] > 0);
+      const job = { id, due: now + .88, copies: cards, onFinish, resource };
+      jobs.push(job);
+      return job;
     },
-    frame(now, reduced, onFinish) {
-      if (job) {
-        const elapsed = reduced ? .90 + now - job.at : now - job.at;
-        const t = ramp(clamp(elapsed / .73, 0, 1));
-        cargo.shown = job.delivery && elapsed < .82;
-        cargo.mesh.position.set(lerp(job.source, sign * (CAMP.mill + .63), t),
-          groundY + .13 + .16 * Math.sin(t * Math.PI), lerp(CAMP.yardZ + 1.01, CAMP.millZ + 1.12, t));
-        if (!job.flashed && elapsed >= .74) {
-          job.flashed = true;
-          onFinish(sign * CAMP.mill, groundY + 1.29, CAMP.millZ + .25);
-          completion = { id: job.id, copies: job.copies, at: now };
-        }
-        if (elapsed >= 1.95) job = null;
+    frame(now, dt, reduced, holding) {
+      equipment.frame(data, now, dt, reduced, holding);
+      const ready = jobs.findIndex(job => now >= job.due);
+      if (ready >= 0) {
+        const [job] = jobs.splice(ready, 1);
+        hideItems(completion?.id);
+        completion = { id: job.id, copies: job.copies, at: now };
+        job.onFinish([sign * CAMP.mill, groundY + 1.29, CAMP.millZ + .25], now);
       }
       if (completion && now - completion.at >= 4.3) {
         hideItems(completion.id);

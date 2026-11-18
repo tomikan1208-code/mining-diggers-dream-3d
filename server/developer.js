@@ -36,6 +36,7 @@ export class DeveloperGame extends HeadlessGame {
 
   resetClock() {
     this.remainingMs = this.limitMs = Math.max(30000, TURN_MS - this.getCurrentPlayer().buffs.timeLimitReduction * 1000);
+    this.lateStart = false;
     this.spawned = false;
   }
 
@@ -111,7 +112,10 @@ export class DeveloperGame extends HeadlessGame {
     }
     if (this.free && id === 'supply') player.buffs.usedSupply = false;
     if (!super.playCard(index)) return 'このカードは現在使えません';
-    if (id === 'totem_of_undying') this.limitMs = this.remainingMs = 30000;
+    if (id === 'totem_of_undying') {
+      this.limitMs = this.remainingMs = 30000;
+      this.lateStart = true;
+    }
     if (!this.gameEnded && this.phase === 'turn') this.checkWinCondition();
     this.record(actor, id, 'card', player.name + 'が「' + ALL_CARDS[id].name + '」を使用', this.cardOutcome);
   }
@@ -190,7 +194,7 @@ export class DeveloperGame extends HeadlessGame {
       round: rest ? this.restRound : this.turnNumber,
       active: rest ? this.restActor : this.currentPlayerIndex,
       phase, winner: this.winner, event: this.event,
-      limitMs: this.limitMs, paused: this.paused, free: this.free,
+      limitMs: this.limitMs, lateStart: this.lateStart, paused: this.paused, free: this.free,
       remainingMs: this.gameEnded ? 0 : this.remainingMs,
       costs: Object.fromEntries(Object.keys(ALL_CARDS).map(id => [id, this.getCardCost(id, this.getCurrentPlayer())])),
       blocked: Object.keys(ALL_CARDS).filter(id => this.blocked(id)),
@@ -206,9 +210,8 @@ export class DeveloperGame extends HeadlessGame {
           altar: player.buffs.beaconTurns, airlift: player.buffs.elytraActive, spy: player.buffs.repeaterTurns,
           spawner: player.buffs.spawnerActive, toolkit: player.buffs.shulkerBoxActive,
           barrier: player.buffs.barrierActive, hostage: player.buffs.hostageNext, noSupply: player.buffs.noSupplyNext,
-          recruitment: player.buffs.turtleEggNext, wind: player.buffs.windyTurns,
-          lava: player.buffs.lavaActive, egg: player.buffs.dragonEggActive, trades: player.buffs.emeraldCount,
-          timeCut: player.buffs.timeLimitReduction,
+          recruitment: player.buffs.turtleEggNext,
+          lava: player.buffs.lavaActive, egg: player.buffs.dragonEggActive,
         },
       })),
     };

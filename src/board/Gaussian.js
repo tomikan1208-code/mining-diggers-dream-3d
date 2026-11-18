@@ -85,8 +85,8 @@ void main() {
       spread = mix(1.0, .46, t * t);
       fade = 1.0 - smoothstep(.50, .97, t);
     } else if (progress < 0.0) {
-      point.y -= progress * (.38 + .48 * random3(point));
-      fade = 1.0 + progress * .64;
+      point.y -= progress * (.71 + .63 * random3(point));
+      fade = 1.0 + progress * .44;
     }
   }
 
@@ -289,6 +289,7 @@ const colors = [
   0x243a56, 0x335374, 0x426e9b, 0x628db0, 0x83acc4, 0xb5c8cf,
   0x593331, 0x753c33, 0x954b37, 0xb76042, 0xcf8155, 0xe19971,
   0x695234, 0x85663c, 0xa0804a, 0xba9a57, 0xd4ae62, 0xf3cb76, 0xffe5a3, 0xf8ecce,
+  0xe73f2b, 0xff753d, 0xa363c4, 0x67c5b8,
 ];
 const palette = Array.from({ length: 48 }, (_, i) => {
   const h = colors[i] ?? 0;
@@ -386,8 +387,11 @@ vec3 pixelNative(ivec2 p) {
 ${resolveKernel}
 void main() {
   ivec2 cell = ivec2(gl_FragCoord.xy);
-  if (groupColor(cell).a < .36) { color = vec4(0.0); return; }
-  color = vec4(pixelResolve(cell), 1.0);
+  vec4 combined = groupColor(cell);
+  if (combined.a < .045) { color = vec4(0.0); return; }
+  float coverage = smoothstep(.05, .78, combined.a);
+  vec3 mapped = combined.a >= .36 ? pixelResolve(cell) : srgb(combined.rgb / combined.a);
+  color = vec4(mapped * coverage, coverage);
 }`;
 
 function screenPass(fragmentShader, uniforms) {

@@ -1,4 +1,5 @@
 import { MathUtils, Vector3 } from 'three';
+import { RESOURCES } from '../game-data.js';
 import { foreman, pose, TEAM } from './art.js';
 import { CAMP, groundY, LAND, rampY, roadZ, SHAFT } from './locations.js';
 import { mineFace } from './mine.js';
@@ -30,6 +31,9 @@ function paths(center, sign) {
   add('machine', sign * 6.75, -2.41, 'inner');
   add('spawner', sign * 6.75, -3.7, 'machine', groundY, true);
   add('stock', sign * CAMP.yard, CAMP.yardZ + 1.45, 'yardRoad');
+  Object.keys(RESOURCES).forEach((resource, i) => {
+    add(resource + 'Stock', sign * (CAMP.yard + (i - 1.5) * 1.47), CAMP.yardZ + 1.32, 'stock');
+  });
   add('trade', sign * 24.75, 2.29, 'yardRoad');
   add('trail', sign * 28.5, .35, 'fork');
   add('pines', sign * 29.5, -1.45, 'trail');
@@ -140,7 +144,7 @@ export class People {
       this.begin(actor, side, 'road', 'stand', now);
       actor.post = 'stand';
     } else if (!present && actor.active && !actor.retire) {
-      actor.job = null;
+      this.cancel(actor);
       actor.retire = 'exit';
       walkTo(actor, nodes.road);
     }
@@ -167,16 +171,27 @@ export class People {
     this.assign(actor, [{ place, carry: true, hold, onArrive, onDone }, { place: 'road' }]);
   }
 
+  cancel(actor) {
+    const job = actor.job;
+    if (!job) return;
+    for (const step of job.jobs.slice(job.index)) step.onCancel?.();
+    actor.job = null;
+  }
+
   assign(actor, jobs) {
     actor.job = { jobs, index: 0, arrived: null };
     walkTo(actor, this.paths[actor.side][jobs[0].place]);
   }
 
-  task(side, jobs) {
+  task(side, jobs, chief = false) {
     const first = this.paths[side][jobs[0].place];
-    const actor = [...this.available(side), this.avatars[side]]
-      .filter(candidate => candidate.active && !candidate.job && !candidate.lodge && !candidate.node.covered &&
-        candidate.model.body.position.y >= 0)
+    const candidates = chief ? [this.avatars[side]] : [...this.available(side), this.avatars[side]];
+    const underground = first.position.y < LAND.slice;
+    const actor = candidates.filter(candidate => {
+      if (!candidate.active || candidate.job || candidate.lodge) return false;
+      if (underground) return candidate.node === first || candidate.goal === first;
+      return candidate.model.body.position.y >= 0;
+    })
       .sort((a, b) => a.model.body.position.distanceToSquared(first.position) - b.model.body.position.distanceToSquared(first.position))[0];
     if (!actor) return false;
     this.assign(actor, jobs);
@@ -192,7 +207,7 @@ export class People {
       if (lostWorker && (gainedWorker || card === 'lead')) {
         const worker = list.at(-1);
         const destination = this.paths[actorSide];
-        worker.job = null;
+        this.cancel(worker);
         worker.side = actorSide;
         worker.lodge = false;
         if (card === 'lead') {
@@ -217,7 +232,7 @@ export class People {
         if (captive) {
           const returnToCrew = missing > 0;
           captive.retire = returnToCrew ? null : 'exit';
-          captive.job = null;
+          this.cancel(captive);
           walkTo(captive, nodes[returnToCrew ? captive.post : 'road']);
           if (returnToCrew) missing--;
         }
@@ -233,11 +248,11 @@ export class People {
       } else if (missing < 0) {
         const leaving = list.slice(missing);
         leaving.forEach((worker, index) => {
-          worker.job = null;
+          this.cancel(worker);
           worker.lodge = false;
           worker.retire = card === 'cobweb' && side !== actorSide ? 'held' : 'exit';
           worker.until = Math.min(worker.until, now) + .15 * index;
-          if (side !== actorSide && card === 'bow') worker.fallAt = now + .24 + index * .13;
+          if (side !== actorSide && card === 'bow') worker.fallAt = now + .72 + index * .13;
           const target = worker.retire === 'held' ? this.paths[actorSide].hold : nodes.road;
           walkTo(worker, target);
         });
