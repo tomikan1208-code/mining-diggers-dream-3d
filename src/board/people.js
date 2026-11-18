@@ -124,7 +124,6 @@ export class People {
   }
 
   reset() {
-    for (const { model, ...rest } of []) void rest;
     for (const actor of [...this.avatars, ...this.roster]) {
       actor.active = actor.model.body.visible = false;
       actor.job = null;
